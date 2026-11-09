@@ -1,10 +1,10 @@
 """Writes .github/workflows/amzdesk.yml from the repository's own flutter-build.yml.
 
-The AMZDesk build is the upstream Windows x64 build, unchanged, plus one step that runs
+The R-TECH DESK build is the upstream Windows x64 build, unchanged, plus one step that runs
 amzdesk/brand.py right after the checkout. It is cut out of flutter-build.yml (not copied by hand),
 so the versions it pins (Flutter, vcpkg, Rust, actions) are always the ones of this checkout.
 Kept: the environment, the bridge job, the top-most-window helper (x64), the Windows job (x64):
-build, portable single-file program, msi (allowed to fail), release under the tag "amzdesk".
+build, portable single-file program, msi (allowed to fail), release named after the app name.
 Dropped: arm64, signing, the msi template, update metadata, every other platform.
 
 Run from the repository root: python amzdesk/make_workflow.py
@@ -15,17 +15,43 @@ from pathlib import Path
 
 SOURCE = Path(".github/workflows/flutter-build.yml")
 TARGET = Path(".github/workflows/amzdesk.yml")
-TAG = "amzdesk"
+BRANCH = "amzdesk"
+TAG_PLACEHOLDER = "@@TAG@@"
+TAG_EXPRESSION = "${{ inputs.app_name || 'R-TECH-DESK' }}"
 
-HEADER = f"""# AMZDesk: RustDesk (AGPL-3.0) for Windows x64 with the a.m.z branding and server built in.
+HEADER = f"""# R-TECH DESK: RustDesk (AGPL-3.0) for Windows x64 with its own name, logo and server built in.
 # Made by amzdesk/make_workflow.py from flutter-build.yml; rerun it after syncing with upstream.
-name: AMZDesk Windows build
+# "Run workflow" is the generator: fill the form (or leave the defaults) and the program is
+# published under a release named after the app name, about an hour later.
+name: R-TECH DESK build (generator)
 
 on:
   workflow_dispatch:
+    inputs:
+      app_name:
+        description: "Technical name: English letters, digits, - and _ only, no spaces (program file, service)"
+        default: "R-TECH-DESK"
+      display_name:
+        description: "Name on the logo and in the file properties (spaces allowed)"
+        default: "R-TECH DESK"
+      subtitle:
+        description: "Second line on the logo (- for none)"
+        default: "א.מ.ז · מעבדת מחשבים"
+      logo:
+        description: "Square picture (PNG/JPG): a path in this repository, or an https address"
+        default: "amzdesk/assets/logo-source.png"
+      company:
+        description: "Company in the file properties"
+        default: "AMZ Computer Lab"
+      server:
+        description: "Server address"
+        default: "64.176.174.232"
+      key:
+        description: "Server public key"
+        default: "vE0E77BjfekoChLKzFeY+cwM0hCzyv4zSLUDDQtYrsU="
   push:
     branches:
-      - {TAG}
+      - {BRANCH}
 
 permissions:
   contents: write
@@ -33,18 +59,28 @@ permissions:
 """
 
 BRANDING_STEP = """
-      - name: AMZDesk branding
+      - name: Branding (R-TECH DESK generator)
         shell: bash
-        run: python3 amzdesk/brand.py
+        env:
+          BRAND_APP_NAME: ${{ inputs.app_name }}
+          BRAND_DISPLAY_NAME: ${{ inputs.display_name }}
+          BRAND_SUBTITLE: ${{ inputs.subtitle }}
+          BRAND_LOGO: ${{ inputs.logo }}
+          BRAND_COMPANY: ${{ inputs.company }}
+          BRAND_SERVER: ${{ inputs.server }}
+          BRAND_KEY: ${{ inputs.key }}
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check pillow
+          python3 amzdesk/brand.py
 """
 
 RENAME_STEP = """
-      - name: AMZDesk file names
+      - name: File names from the app name
         if: env.UPLOAD_ARTIFACT == 'true'
         shell: bash
         run: |
           cd SignOutput
-          for f in rustdesk-*; do mv "$f" "AMZDesk-${f#rustdesk-}"; done
+          for f in rustdesk-*; do mv "$f" "${BRAND_APP_NAME}-${f#rustdesk-}"; done
           ls -l
 """
 
@@ -130,7 +166,7 @@ def main() -> None:
     # Inputs of the reusable workflow become fixed values.
     def fix(block: list[str]) -> list[str]:
         text = "\n".join(block)
-        text = text.replace("${{ inputs.upload-tag }}", TAG)
+        text = text.replace("${{ inputs.upload-tag }}", TAG_PLACEHOLDER)
         text = text.replace("${{ inputs.upload-artifact }}", "true")
         text = text.replace("inputs.upload-artifact", "true")
         text = text.replace("${{ inputs.publish-update-metadata }}", "false")
@@ -151,10 +187,11 @@ def main() -> None:
     windows = insert_after(windows, lambda l: l.strip() == "- name: Build msi", "        continue-on-error: true", "msi")
     windows = insert_before_step(windows, "Publish Release", RENAME_STEP)
     text = "\n".join(windows)
-    text = text.replace("./SignOutput/rustdesk-*.msi", "./SignOutput/AMZDesk-*.msi")
-    text = text.replace("./SignOutput/rustdesk-*.exe", "./SignOutput/AMZDesk-*.exe")
+    text = text.replace("./SignOutput/rustdesk-*.msi", "./SignOutput/*.msi")
+    text = text.replace("./SignOutput/rustdesk-*.exe", "./SignOutput/*.exe")
     windows = text.split("\n")
 
+    env = [l.replace(TAG_PLACEHOLDER, TAG_EXPRESSION) for l in env]
     out = HEADER + "\n".join(env) + "\n\njobs:\n" + "\n".join(bridge) + "\n" + "\n".join(topmost) + "\n" \
         + "\n".join(windows) + "\n"
     TARGET.write_text(out, encoding="utf-8", newline="\n")

@@ -1,9 +1,33 @@
-# AMZDesk: RustDesk (AGPL-3.0) for Windows x64 with the a.m.z branding and server built in.
+# R-TECH DESK: RustDesk (AGPL-3.0) for Windows x64 with its own name, logo and server built in.
 # Made by amzdesk/make_workflow.py from flutter-build.yml; rerun it after syncing with upstream.
-name: AMZDesk Windows build
+# "Run workflow" is the generator: fill the form (or leave the defaults) and the program is
+# published under a release named after the app name, about an hour later.
+name: R-TECH DESK build (generator)
 
 on:
   workflow_dispatch:
+    inputs:
+      app_name:
+        description: "Technical name: English letters, digits, - and _ only, no spaces (program file, service)"
+        default: "R-TECH-DESK"
+      display_name:
+        description: "Name on the logo and in the file properties (spaces allowed)"
+        default: "R-TECH DESK"
+      subtitle:
+        description: "Second line on the logo (- for none)"
+        default: "א.מ.ז · מעבדת מחשבים"
+      logo:
+        description: "Square picture (PNG/JPG): a path in this repository, or an https address"
+        default: "amzdesk/assets/logo-source.png"
+      company:
+        description: "Company in the file properties"
+        default: "AMZ Computer Lab"
+      server:
+        description: "Server address"
+        default: "64.176.174.232"
+      key:
+        description: "Server public key"
+        default: "vE0E77BjfekoChLKzFeY+cwM0hCzyv4zSLUDDQtYrsU="
   push:
     branches:
       - amzdesk
@@ -33,7 +57,7 @@ env:
   FLUTTER_MACOS_ARM_VERSION: "3.44.9"
   # for arm64 linux because official Dart SDK does not work
   FLUTTER_ELINUX_VERSION: "3.16.9"
-  TAG_NAME: "amzdesk"
+  TAG_NAME: "${{ inputs.app_name || 'R-TECH-DESK' }}"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   # vcpkg version: 2026.07.29
   # If we change the `VCPKG COMMIT_ID`, please remember:
@@ -105,9 +129,19 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
-      - name: AMZDesk branding
+      - name: Branding (R-TECH DESK generator)
         shell: bash
-        run: python3 amzdesk/brand.py
+        env:
+          BRAND_APP_NAME: ${{ inputs.app_name }}
+          BRAND_DISPLAY_NAME: ${{ inputs.display_name }}
+          BRAND_SUBTITLE: ${{ inputs.subtitle }}
+          BRAND_LOGO: ${{ inputs.logo }}
+          BRAND_COMPANY: ${{ inputs.company }}
+          BRAND_SERVER: ${{ inputs.server }}
+          BRAND_KEY: ${{ inputs.key }}
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check pillow
+          python3 amzdesk/brand.py
 
       - name: Restore bridge files
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -412,7 +446,7 @@ jobs:
           msbuild msi.sln -p:Configuration=Release -p:Platform=$msiPlatform /p:TargetVersion=Windows10
           $msi = Get-ChildItem ./Package/bin/*/Release/en-us/Package.msi | Select-Object -First 1
           mv $msi.FullName ../../SignOutput/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.msi
-          sha256sum ../../SignOutput/AMZDesk-*.msi
+          sha256sum ../../SignOutput/*.msi
 
       - name: Sign rustdesk self-extracted file
         if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != '-2'
@@ -436,12 +470,12 @@ jobs:
           path: ./SignOutput/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.msi
           if-no-files-found: error
 
-      - name: AMZDesk file names
+      - name: File names from the app name
         if: env.UPLOAD_ARTIFACT == 'true'
         shell: bash
         run: |
           cd SignOutput
-          for f in rustdesk-*; do mv "$f" "AMZDesk-${f#rustdesk-}"; done
+          for f in rustdesk-*; do mv "$f" "${BRAND_APP_NAME}-${f#rustdesk-}"; done
           ls -l
 
       - name: Publish Release
@@ -451,7 +485,7 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            ./SignOutput/AMZDesk-*.msi
-            ./SignOutput/AMZDesk-*.exe
+            ./SignOutput/*.msi
+            ./SignOutput/*.exe
 
   # The fallback for the flutter version, we use Sciter for 32bit Windows.
