@@ -3,13 +3,15 @@
 // designs Moti chose (ע1, ע4, נ2), a simple screen for relatives, or RustDesk's own screen.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_hbb/common.dart';
+// common.dart has a Dialog of its own; the dialogs here are Flutter's.
+import 'package:flutter_hbb/common.dart' hide Dialog;
 import 'package:flutter_hbb/common/formatter/id_formatter.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_tab_page.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/server_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
+import 'package:flutter_hbb/utils/multi_window_manager.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -74,8 +76,80 @@ class _RtechHomeState extends State<RtechHome> {
           default:
             page = const RtechF1();
         }
-        return Directionality(textDirection: TextDirection.rtl, child: page);
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const RtechInstallBar(),
+            Expanded(child: page),
+          ]),
+        );
       },
+    );
+  }
+}
+
+// ------------------------------------------------------------------ install
+
+/// RustDesk's "install" card lives in the left pane of its own screen, which the R-TECH designs
+/// replace: the same choice, as a bar above them (Windows, program not installed or older).
+class RtechInstallBar extends StatelessWidget {
+  const RtechInstallBar({Key? key}) : super(key: key);
+
+  // Asked once: the screen rebuilds every few seconds, and the answer changes only with a
+  // restart of the program (installing restarts it).
+  static int _state = -1; // 0 nothing to show, 1 not installed, 2 older version installed
+
+  static int _check() {
+    if (!isWindows || bind.isDisableInstallation() || bind.isOutgoingOnly()) {
+      return 0;
+    }
+    if (!bind.mainIsInstalled()) return 1;
+    if (bind.mainIsInstalledLowerVersion()) return 2;
+    return 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_state < 0) _state = _check();
+    final String text;
+    final String button;
+    final VoidCallback action;
+    if (_state == 1) {
+      text = 'התוכנה רצה בלי התקנה. כדי שאפשר יהיה להתחבר למחשב הזה גם אחרי הפעלה מחדש — התקן אותה.';
+      button = 'התקנה';
+      action = () async {
+        await rustDeskWinManager.closeAllSubWindows();
+        bind.mainGotoInstall();
+      };
+    } else if (_state == 2) {
+      text = 'במחשב מותקנת גרסה ישנה יותר של התוכנה.';
+      button = 'עדכון ההתקנה';
+      action = () async {
+        await rustDeskWinManager.closeAllSubWindows();
+        bind.mainUpdateMe();
+      };
+    } else {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      color: const Color(0xFF3E2A14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(children: [
+        const Icon(Icons.download_for_offline_outlined,
+            size: 20, color: Color(0xFFFFB74D)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(text,
+              style: const TextStyle(color: Color(0xFFFAEEDC), fontSize: 13)),
+        ),
+        const SizedBox(width: 12),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+              backgroundColor: kRtechAccent, foregroundColor: Colors.white),
+          onPressed: action,
+          child: Text(button),
+        ),
+      ]),
     );
   }
 }

@@ -120,11 +120,26 @@ DART_CHECK_JOB = """
           cd $(dirname $(dirname $(which flutter)))
           git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
       - name: Analyze the R-TECH screens
+        # Errors and warnings also become annotations, which the public API shows without a login.
         shell: bash
         run: |
           cd flutter
           flutter pub get
-          flutter analyze --no-fatal-infos --no-fatal-warnings lib/rtech lib/desktop/pages/desktop_home_page.dart lib/common/widgets/dialog.dart
+          set +e
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/rtech lib/desktop/pages/desktop_home_page.dart lib/common/widgets/dialog.dart > analyze.txt 2>&1
+          status=$?
+          set -e
+          cat analyze.txt
+          python3 - <<'PY'
+          import re
+          pattern = r"\\s*(error|warning) [•-] (.*) [•-] (\\S+?):(\\d+):(\\d+) [•-] (\\S+)\\s*$"
+          for line in open("analyze.txt", encoding="utf-8", errors="replace"):
+              m = re.match(pattern, line)
+              if m:
+                  text = m.group(2).replace("%", "%25")
+                  print(f"::{m.group(1)} file=flutter/{m.group(3)},line={m.group(4)},col={m.group(5)}::{text} ({m.group(6)})")
+          PY
+          exit $status
 """
 
 
