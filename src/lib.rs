@@ -41,6 +41,9 @@ mod bridge_generated;
 pub mod flutter;
 #[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
 pub mod flutter_ffi;
+// R-TECH DESK: screen pictures for the computer tiles of the main window.
+#[cfg(any(target_os = "android", target_os = "ios", feature = "flutter"))]
+mod rtech_thumb;
 use common::*;
 mod auth_2fa;
 mod trusted_devices;

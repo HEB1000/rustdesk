@@ -2186,6 +2186,11 @@ pub fn main_set_home_dir(_home: String) {
     }
 }
 
+// R-TECH DESK: the folder of the screen pictures shown on the computer tiles.
+pub fn main_get_rtech_thumbs_dir() -> SyncReturn<String> {
+    SyncReturn(crate::rtech_thumb::folder().to_string_lossy().to_string())
+}
+
 // This is a temporary method to get data dir for ios
 pub fn main_get_data_dir_ios(app_dir: String) -> SyncReturn<String> {
     *config::APP_DIR.write().unwrap() = app_dir;

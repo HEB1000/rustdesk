@@ -971,11 +971,9 @@ _connectDialog(
   bool waitForAccept = false,
 }) async {
   final errUsername = ''.obs;
-  var rememberPassword = false;
-  if (passwordController != null) {
-    rememberPassword =
-        await bind.sessionGetRemember(sessionId: sessionId) ?? false;
-  }
+  // R-TECH DESK: "remember" is on by default, so the next time a double click on the
+  // computer's tile connects right away.
+  var rememberPassword = true;
   if (osUsernameController != null) {
     osUsernameController.addListener(() {
       if (errUsername.value.isNotEmpty) {

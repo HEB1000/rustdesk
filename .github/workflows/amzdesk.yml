@@ -28,6 +28,12 @@ on:
       key:
         description: "Server public key"
         default: "vE0E77BjfekoChLKzFeY+cwM0hCzyv4zSLUDDQtYrsU="
+      about:
+        description: "Lines in About, separated by | (- for none)"
+        default: "פיתוח: א.מ.ז|053-3157965|a0533157965@gmail.com"
+      accent:
+        description: "Main color, 6 hex digits"
+        default: "A9622B"
   push:
     branches:
       - amzdesk
@@ -99,9 +105,38 @@ jobs:
       platform: ${{ matrix.job.platform }}
       target_version: Windows10
 
+  dart-check:
+    name: Dart check (R-TECH screens)
+    needs: [generate-bridge]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Restore bridge files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: bridge-artifact
+          path: ./
+      - name: Install flutter
+        uses: subosito/flutter-action@2783a3f08e1baf891508463f8c6653c258246225  # v2.12.0; https://github.com/subosito/flutter-action/issues/277
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+      - name: Patch flutter (as the Windows build does)
+        shell: bash
+        run: |
+          cd $(dirname $(dirname $(which flutter)))
+          git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+      - name: Analyze the R-TECH screens
+        shell: bash
+        run: |
+          cd flutter
+          flutter pub get
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/rtech lib/desktop/pages/desktop_home_page.dart lib/common/widgets/dialog.dart
+
   build-for-windows-flutter:
     name: ${{ matrix.job.target }}
-    needs: [build-RustDeskTempTopMostWindow, generate-bridge]
+    needs: [build-RustDeskTempTopMostWindow, generate-bridge, dart-check]
     runs-on: ${{ matrix.job.os }}
     strategy:
       fail-fast: false
@@ -139,6 +174,9 @@ jobs:
           BRAND_COMPANY: ${{ inputs.company }}
           BRAND_SERVER: ${{ inputs.server }}
           BRAND_KEY: ${{ inputs.key }}
+          BRAND_ABOUT: ${{ inputs.about }}
+          BRAND_ACCENT: ${{ inputs.accent }}
+          BRAND_SOURCE: ${{ github.server_url }}/${{ github.repository }}
         run: |
           python3 -m pip install --quiet --disable-pip-version-check pillow
           python3 amzdesk/brand.py

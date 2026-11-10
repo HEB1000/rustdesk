@@ -49,6 +49,12 @@ on:
       key:
         description: "Server public key"
         default: "vE0E77BjfekoChLKzFeY+cwM0hCzyv4zSLUDDQtYrsU="
+      about:
+        description: "Lines in About, separated by | (- for none)"
+        default: "פיתוח: א.מ.ז|053-3157965|a0533157965@gmail.com"
+      accent:
+        description: "Main color, 6 hex digits"
+        default: "A9622B"
   push:
     branches:
       - {BRANCH}
@@ -69,6 +75,9 @@ BRANDING_STEP = """
           BRAND_COMPANY: ${{ inputs.company }}
           BRAND_SERVER: ${{ inputs.server }}
           BRAND_KEY: ${{ inputs.key }}
+          BRAND_ABOUT: ${{ inputs.about }}
+          BRAND_ACCENT: ${{ inputs.accent }}
+          BRAND_SOURCE: ${{ github.server_url }}/${{ github.repository }}
         run: |
           python3 -m pip install --quiet --disable-pip-version-check pillow
           python3 amzdesk/brand.py
@@ -85,8 +94,50 @@ RENAME_STEP = """
 """
 
 
+# A quick Dart check of the R-TECH screens (about 5 minutes) before the hour-long Windows build,
+# so a mistake there fails early. The @@...@@ are the pinned actions of the Windows job.
+DART_CHECK_JOB = """
+  dart-check:
+    name: Dart check (R-TECH screens)
+    needs: [generate-bridge]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout source code
+        uses: @@CHECKOUT@@
+      - name: Restore bridge files
+        uses: @@DOWNLOAD@@
+        with:
+          name: bridge-artifact
+          path: ./
+      - name: Install flutter
+        uses: @@FLUTTER@@
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+      - name: Patch flutter (as the Windows build does)
+        shell: bash
+        run: |
+          cd $(dirname $(dirname $(which flutter)))
+          git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+      - name: Analyze the R-TECH screens
+        shell: bash
+        run: |
+          cd flutter
+          flutter pub get
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/rtech lib/desktop/pages/desktop_home_page.dart lib/common/widgets/dialog.dart
+"""
+
+
 def fail(message: str) -> None:
     sys.exit(f"make_workflow.py: {message}")
+
+
+def uses_of(block: list[str], action: str) -> str:
+    """The pinned "uses:" value of an action in a job, e.g. actions/checkout@<sha> # v4."""
+    found = [l.split("uses:", 1)[1].strip() for l in block if l.strip().startswith(f"uses: {action}@")]
+    if not found:
+        fail(f"no {action} in the Windows job")
+    return found[0]
 
 
 def top_block(lines: list[str], key: str) -> list[str]:
@@ -186,6 +237,14 @@ def main() -> None:
     # The msi is a bonus: if its tools do not like the new name, the release still goes out.
     windows = insert_after(windows, lambda l: l.strip() == "- name: Build msi", "        continue-on-error: true", "msi")
     windows = insert_before_step(windows, "Publish Release", RENAME_STEP)
+    dart_check = DART_CHECK_JOB.strip("\n")
+    for mark, action in (("@@CHECKOUT@@", "actions/checkout"), ("@@DOWNLOAD@@", "actions/download-artifact"),
+                         ("@@FLUTTER@@", "subosito/flutter-action")):
+        dart_check = dart_check.replace(mark, uses_of(windows, action))
+    old_needs = "    needs: [build-RustDeskTempTopMostWindow, generate-bridge]"
+    if sum(1 for l in windows if l == old_needs) != 1:
+        fail("the Windows job's needs line changed")
+    windows = [old_needs[:-1] + ", dart-check]" if l == old_needs else l for l in windows]
     text = "\n".join(windows)
     text = text.replace("./SignOutput/rustdesk-*.msi", "./SignOutput/*.msi")
     text = text.replace("./SignOutput/rustdesk-*.exe", "./SignOutput/*.exe")
@@ -193,7 +252,7 @@ def main() -> None:
 
     env = [l.replace(TAG_PLACEHOLDER, TAG_EXPRESSION) for l in env]
     out = HEADER + "\n".join(env) + "\n\njobs:\n" + "\n".join(bridge) + "\n" + "\n".join(topmost) + "\n" \
-        + "\n".join(windows) + "\n"
+        + dart_check + "\n\n" + "\n".join(windows) + "\n"
     TARGET.write_text(out, encoding="utf-8", newline="\n")
     print(f"wrote {TARGET} ({len(out.splitlines())} lines)")
 

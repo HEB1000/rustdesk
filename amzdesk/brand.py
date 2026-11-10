@@ -9,6 +9,9 @@ Run from the repository root, before the build. Everything comes from environmen
   BRAND_LOGO          a square picture (PNG/JPG): a path in this repository or an https address
   BRAND_SERVER        the rendezvous server address
   BRAND_KEY           that server's public key
+  BRAND_ABOUT         the lines under "About", separated by | ("-": none)
+  BRAND_ACCENT        the main color, 6 hex digits like A9622B
+  BRAND_SOURCE        the address of this source code, shown in "About" (AGPL-3.0)
 From the one square picture it makes every icon size, the in-app icon and the wide logo.
 Every text replacement must match exactly once, or the script stops: a changed upstream file
 fails the build loudly instead of producing a half-branded program.
@@ -16,6 +19,7 @@ fails the build loudly instead of producing a half-branded program.
 This is RustDesk (https://github.com/rustdesk/rustdesk, AGPL-3.0) with these changes.
 """
 import io
+import json
 import os
 import re
 import shutil
@@ -34,6 +38,9 @@ DEFAULTS = {
     "BRAND_LOGO": "amzdesk/assets/logo-source.png",
     "BRAND_SERVER": "64.176.174.232",
     "BRAND_KEY": "vE0E77BjfekoChLKzFeY+cwM0hCzyv4zSLUDDQtYrsU=",
+    "BRAND_ABOUT": "פיתוח: א.מ.ז|053-3157965|a0533157965@gmail.com",
+    "BRAND_ACCENT": "A9622B",
+    "BRAND_SOURCE": "https://github.com/HEB1000/rustdesk",
 }
 
 
@@ -66,6 +73,29 @@ def rc_text(value: str) -> str:
 
 def toml_text(value: str) -> str:
     return value.replace("\\", "").replace('"', "")
+
+
+def dart_text(value: str) -> str:
+    """A Dart string literal: JSON escapes are valid Dart, and $ must not start interpolation."""
+    return json.dumps(value, ensure_ascii=False).replace("$", "\\$")
+
+
+def write_dart_brand(display_name: str, subtitle: str, about: list, source: str, accent: str) -> None:
+    """The texts of the R-TECH screens (flutter/lib/rtech/rtech_brand.dart)."""
+    path = ROOT / "flutter/lib/rtech/rtech_brand.dart"
+    if not path.is_file():
+        fail("missing flutter/lib/rtech/rtech_brand.dart")
+    lines = "".join(f"  {dart_text(line)},\n" for line in about)
+    path.write_text(
+        "// R-TECH DESK brand texts, written by amzdesk/brand.py from the generator form.\n"
+        "import 'package:flutter/material.dart';\n\n"
+        f"const String kRtechDisplayName = {dart_text(display_name)};\n"
+        f"const String kRtechSubtitle = {dart_text(subtitle)};\n"
+        f"const List<String> kRtechAbout = [\n{lines}];\n"
+        f"const String kRtechSource = {dart_text(source)};\n"
+        f"const Color kRtechAccent = Color(0xFF{accent});\n",
+        encoding="utf-8")
+    print(f"wrote flutter/lib/rtech/rtech_brand.dart ({len(about)} About lines, accent {accent})")
 
 
 # ------------------------------------------------------------------ pictures
@@ -194,6 +224,14 @@ def main() -> None:
         fail(f"server {server!r} is not an address")
     if not re.fullmatch(r"[A-Za-z0-9+/=]{40,60}", key):
         fail("the server key does not look like a RustDesk key (44 base64 characters)")
+    about_text = setting("BRAND_ABOUT")
+    about = [] if about_text == "-" else [x.strip() for x in about_text.split("|") if x.strip()]
+    accent = setting("BRAND_ACCENT").lstrip("#").upper()
+    if not re.fullmatch(r"[0-9A-F]{6}", accent):
+        fail(f"color {accent!r}: 6 hex digits, like A9622B")
+    source = setting("BRAND_SOURCE")
+    if not re.fullmatch(r"https://[A-Za-z0-9./_~:-]+", source):
+        fail(f"source address {source!r} must be an https:// address")
 
     config = "libs/hbb_common/src/config.rs"
     replace_once(config, r'(APP_NAME: RwLock<String> = RwLock::new\(")RustDesk("\.to_owned\(\)\))',
@@ -215,6 +253,26 @@ def main() -> None:
                  r'\g<1>ProductName = "' + toml_text(shown) + '"', re.S)
     replace_once(cargo, r'(\[package\.metadata\.winres\][^\[]*?)FileDescription = "[^"]*"',
                  r'\g<1>FileDescription = "' + toml_text(shown) + '"', re.S)
+
+    # The program people download is a small self-extracting wrapper with its own file properties
+    # (its icon already comes from res/icon.ico).
+    portable = "libs/portable/Cargo.toml"
+    replace_once(portable, r'(\[package\.metadata\.winres\][^\[]*?)ProductName = "[^"]*"',
+                 r'\g<1>ProductName = "' + toml_text(shown) + '"', re.S)
+    replace_once(portable, r'(\[package\.metadata\.winres\][^\[]*?)FileDescription = "[^"]*"',
+                 r'\g<1>FileDescription = "' + toml_text(shown) + '"', re.S)
+    replace_once(portable, r'(\[package\.metadata\.winres\][^\[]*?)OriginalFilename = "[^"]*"',
+                 r'\g<1>OriginalFilename = "' + app_name + '.exe"', re.S)
+
+    # The R-TECH screens and RustDesk's own screens (buttons, links, switches) in the main color.
+    write_dart_brand(display_name, subtitle, about, source, accent)
+    theme = "flutter/lib/common.dart"
+    replace_once(theme, r"(static const Color accent = )Color\(0xFF0071FF\);",
+                 r"\g<1>Color(0xFF" + accent + ");")
+    replace_once(theme, r"(static const Color accent50 = )Color\(0x770071FF\);",
+                 r"\g<1>Color(0x77" + accent + ");")
+    replace_once(theme, r"(static const Color accent80 = )Color\(0xAA0071FF\);",
+                 r"\g<1>Color(0xAA" + accent + ");")
 
     pictures = ROOT / "target" / "brand-pictures"
     make_pictures(load_logo(setting("BRAND_LOGO")), display_name, subtitle, pictures)

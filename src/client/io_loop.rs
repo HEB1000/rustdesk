@@ -2901,6 +2901,15 @@ impl<T: InvokeUiSession> Remote<T> {
             discard_queue: discard_queue.clone(),
         };
         let handler = self.handler.ui_handler.clone();
+        // R-TECH DESK: a small picture of this screen for the computer's tile.
+        #[cfg(feature = "flutter")]
+        let thumb_id = if self.handler.is_view_camera() {
+            String::new()
+        } else {
+            self.handler.get_id()
+        };
+        #[cfg(feature = "flutter")]
+        crate::rtech_thumb::start(&thumb_id);
         crate::client::start_video_thread(
             self.handler.clone(),
             display,
@@ -2915,6 +2924,8 @@ impl<T: InvokeUiSession> Remote<T> {
                   pixelbuffer: bool| {
                 *frame_count.write().unwrap() += 1;
                 if pixelbuffer {
+                    #[cfg(feature = "flutter")]
+                    crate::rtech_thumb::offer(&thumb_id, display, data);
                     handler.on_rgba(display, data);
                 } else {
                     #[cfg(all(feature = "vram", feature = "flutter"))]
