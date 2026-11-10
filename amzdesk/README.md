@@ -15,7 +15,8 @@ The program is published under a release named after the technical name.
   (also of the self-extracting wrapper), the texts of the R-TECH screens and the main color.
 - `assets/` — the pictures it starts from.
 - `make_workflow.py` — writes `.github/workflows/amzdesk.yml` from upstream `flutter-build.yml`
-  (Windows x64 only, the branding step, and a quick Dart check before the long Windows build).
+  (Windows x64 only, the branding step, a quick Dart check before the long Windows build, and
+  an msi under the app name and company, so it does not touch an installed RustDesk).
   Rerun it after syncing with upstream.
 
 ## Changes to the RustDesk source

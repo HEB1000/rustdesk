@@ -284,10 +284,13 @@ def main() -> None:
     for logo in ("logo.png", "logo_light.png", "logo_dark.png"):
         copy(pictures, logo, f"flutter/assets/{logo}")
 
-    # For the next steps of the workflow (file names, release tag).
+    # For the next steps of the workflow (file names, release tag, the msi). The msi tools write
+    # the manufacturer into an XML attribute unescaped, so it goes there without " < > & $ `.
+    manufacturer = re.sub(r'["<>&$`\r\n]', "", company).strip() or app_name
     if "GITHUB_ENV" in os.environ:
         with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
             env.write(f"BRAND_APP_NAME={app_name}\n")
+            env.write(f"BRAND_MSI_MANUFACTURER={manufacturer}\n")
     print(f"brand.py: {app_name} ({display_name}) -> {server}")
 
 

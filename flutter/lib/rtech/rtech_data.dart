@@ -10,6 +10,7 @@ import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/common/formatter/id_formatter.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
 import 'package:flutter_hbb/models/platform_model.dart';
+import 'package:flutter_hbb/models/state_model.dart';
 
 const List<String> kRtechGroups = ['בית', 'עבודה', 'משפחה', 'לקוחות'];
 
@@ -68,6 +69,7 @@ class RtechData extends ChangeNotifier {
   final Map<String, RtechThumb> _thumbs = {};
   String _thumbsDir = '';
   Timer? _timer;
+  Timer? _statusTimer;
   int _users = 0;
   int _ticks = 0;
   bool _refreshing = false;
@@ -88,6 +90,11 @@ class RtechData extends ChangeNotifier {
     peers.addListener(_onPeers);
     bind.mainLoadRecentPeers();
     _timer = Timer.periodic(const Duration(seconds: 5), (_) => _tick());
+    // The server state ("ready") is polled by RustDesk's own home page, which the R-TECH
+    // screens do not show, so it is polled here as well (the same call, every second).
+    _updateStatus();
+    _statusTimer =
+        Timer.periodic(const Duration(seconds: 1), (_) => _updateStatus());
   }
 
   void detach() {
@@ -96,7 +103,24 @@ class RtechData extends ChangeNotifier {
     _users = 0;
     _timer?.cancel();
     _timer = null;
+    _statusTimer?.cancel();
+    _statusTimer = null;
     peers.removeListener(_onPeers);
+  }
+
+  Future<void> _updateStatus() async {
+    try {
+      final status =
+          jsonDecode(await bind.mainGetConnectStatus()) as Map<String, dynamic>;
+      final n = status['status_num'] as int;
+      stateGlobal.svcStatus.value = n == 1
+          ? SvcStatus.ready
+          : n == 0
+              ? SvcStatus.connecting
+              : SvcStatus.notReady;
+      final count = status['video_conn_count'];
+      if (count is int) stateGlobal.videoConnCount.value = count;
+    } catch (_) {}
   }
 
   void _onPeers() {

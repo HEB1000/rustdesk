@@ -94,6 +94,12 @@ RENAME_STEP = """
 """
 
 
+MSI_LINES = """
+          if ($env:BRAND_APP_NAME -ne 'rustdesk') { Move-Item ../../rustdesk/rustdesk.exe "../../rustdesk/$($env:BRAND_APP_NAME).exe" }
+          python preprocess.py --arp -d ../../rustdesk --app-name "$env:BRAND_APP_NAME" -m "$env:BRAND_MSI_MANUFACTURER"
+"""
+
+
 # A quick Dart check of the R-TECH screens (about 5 minutes) before the hour-long Windows build,
 # so a mistake there fails early. The @@...@@ are the pinned actions of the Windows job.
 DART_CHECK_JOB = """
@@ -261,6 +267,13 @@ def main() -> None:
         fail("the Windows job's needs line changed")
     windows = [old_needs[:-1] + ", dart-check]" if l == old_needs else l for l in windows]
     text = "\n".join(windows)
+    # The msi gets the app name too. Without it the msi is "RustDesk" by Purslane, with RustDesk's
+    # upgrade code: on a computer with RustDesk it stops ("installed by self-installation") or
+    # would replace it. preprocess.py looks for <app name>.exe in the folder it packs.
+    old_msi = "          python preprocess.py --arp -d ../../rustdesk"
+    if text.count(old_msi + "\n") != 1:
+        fail("the msi step's preprocess line changed")
+    text = text.replace(old_msi + "\n", MSI_LINES.strip("\n") + "\n")
     text = text.replace("./SignOutput/rustdesk-*.msi", "./SignOutput/*.msi")
     text = text.replace("./SignOutput/rustdesk-*.exe", "./SignOutput/*.exe")
     windows = text.split("\n")
