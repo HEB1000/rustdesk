@@ -12,6 +12,7 @@ Run from the repository root, before the build. Everything comes from environmen
   BRAND_ABOUT         the lines under "About", separated by | ("-": none)
   BRAND_ACCENT        the main color, 6 hex digits like A9622B
   BRAND_SOURCE        the address of this source code, shown in "About" (AGPL-3.0)
+  BRAND_MAKER_LOGO    the maker's small logo, next to the name and in "About" ("-": none)
 From the one square picture it makes every icon size, the in-app icon and the wide logo.
 Every text replacement must match exactly once, or the script stops: a changed upstream file
 fails the build loudly instead of producing a half-branded program.
@@ -33,14 +34,15 @@ ROOT = Path.cwd()
 DEFAULTS = {
     "BRAND_APP_NAME": "R-TECH-DESK",
     "BRAND_DISPLAY_NAME": "R-TECH DESK",
-    "BRAND_SUBTITLE": "א.מ.ז · מעבדת מחשבים",
+    "BRAND_SUBTITLE": "מעבדה מקצועית למחשבים ולאנדרואיד",
     "BRAND_COMPANY": "AMZ Computer Lab",
-    "BRAND_LOGO": "amzdesk/assets/logo-source.png",
+    "BRAND_LOGO": "amzdesk/assets/rtech-icon.png",
     "BRAND_SERVER": "64.176.174.232",
     "BRAND_KEY": "vE0E77BjfekoChLKzFeY+cwM0hCzyv4zSLUDDQtYrsU=",
     "BRAND_ABOUT": "פיתוח: א.מ.ז|053-3157965|a0533157965@gmail.com",
-    "BRAND_ACCENT": "A9622B",
+    "BRAND_ACCENT": "DC6425",
     "BRAND_SOURCE": "https://github.com/HEB1000/rustdesk",
+    "BRAND_MAKER_LOGO": "amzdesk/assets/logo-source.png",
 }
 
 
@@ -80,7 +82,8 @@ def dart_text(value: str) -> str:
     return json.dumps(value, ensure_ascii=False).replace("$", "\\$")
 
 
-def write_dart_brand(display_name: str, subtitle: str, about: list, source: str, accent: str) -> None:
+def write_dart_brand(display_name: str, subtitle: str, about: list, source: str, accent: str,
+                     has_maker: bool) -> None:
     """The texts of the R-TECH screens (flutter/lib/rtech/rtech_brand.dart)."""
     path = ROOT / "flutter/lib/rtech/rtech_brand.dart"
     if not path.is_file():
@@ -93,7 +96,8 @@ def write_dart_brand(display_name: str, subtitle: str, about: list, source: str,
         f"const String kRtechSubtitle = {dart_text(subtitle)};\n"
         f"const List<String> kRtechAbout = [\n{lines}];\n"
         f"const String kRtechSource = {dart_text(source)};\n"
-        f"const Color kRtechAccent = Color(0xFF{accent});\n",
+        f"const Color kRtechAccent = Color(0xFF{accent});\n"
+        f"const bool kRtechHasMaker = {'true' if has_maker else 'false'};\n",
         encoding="utf-8")
     print(f"wrote flutter/lib/rtech/rtech_brand.dart ({len(about)} About lines, accent {accent})")
 
@@ -177,6 +181,20 @@ def wide_logo(icon, title: str, subtitle: str, title_color, sub_color):
     return image
 
 
+def ink_of(logo):
+    """The logo's main dark color (for the name next to it); brown when it has none."""
+    small = logo.resize((64, 64))
+    counts = {}
+    for r, g, b, a in small.getdata():
+        if a > 200 and (0.299 * r + 0.587 * g + 0.114 * b) < 110:
+            key = (r // 8 * 8, g // 8 * 8, b // 8 * 8)
+            counts[key] = counts.get(key, 0) + 1
+    if not counts:
+        return (168, 97, 42, 255)
+    r, g, b = max(counts, key=counts.get)
+    return (r, g, b, 255)
+
+
 def make_pictures(logo, display_name: str, subtitle: str, out: Path) -> None:
     from PIL import Image
     out.mkdir(parents=True, exist_ok=True)
@@ -185,12 +203,25 @@ def make_pictures(logo, display_name: str, subtitle: str, out: Path) -> None:
     logo.resize((512, 512), Image.LANCZOS).save(out / "icon.png")
     for name, size in [("32x32.png", 32), ("64x64.png", 64), ("128x128.png", 128), ("128x128@2x.png", 256)]:
         logo.resize((size, size), Image.LANCZOS).save(out / name)
-    brown, cream = (168, 97, 42, 255), (250, 238, 220, 255)
-    muted_light, muted_dark = (122, 106, 85, 255), (226, 205, 176, 255)
+    ink, light = ink_of(logo), (245, 247, 250, 255)
+    muted_light, muted_dark = (96, 108, 128, 255), (200, 210, 222, 255)
     title = visual_order(display_name)
-    wide_logo(logo, title, subtitle, brown, muted_light).save(out / "logo.png")
-    wide_logo(logo, title, subtitle, brown, muted_light).save(out / "logo_light.png")
-    wide_logo(logo, title, subtitle, cream, muted_dark).save(out / "logo_dark.png")
+    wide_logo(logo, title, subtitle, ink, muted_light).save(out / "logo.png")
+    wide_logo(logo, title, subtitle, ink, muted_light).save(out / "logo_light.png")
+    wide_logo(logo, title, subtitle, light, muted_dark).save(out / "logo_dark.png")
+
+
+def make_maker(source: str) -> bool:
+    """The maker's small logo (flutter/assets/rtech_maker.png); "-" leaves an empty picture."""
+    from PIL import Image
+    target = ROOT / "flutter/assets/rtech_maker.png"
+    if source == "-":
+        Image.new("RGBA", (1, 1), (0, 0, 0, 0)).save(target)
+        print("maker logo: none")
+        return False
+    load_logo(source).resize((256, 256), Image.LANCZOS).save(target)
+    print("wrote flutter/assets/rtech_maker.png")
+    return True
 
 
 def copy(folder: Path, asset: str, *targets: str) -> None:
@@ -265,7 +296,8 @@ def main() -> None:
                  r'\g<1>OriginalFilename = "' + app_name + '.exe"', re.S)
 
     # The R-TECH screens and RustDesk's own screens (buttons, links, switches) in the main color.
-    write_dart_brand(display_name, subtitle, about, source, accent)
+    has_maker = make_maker(setting("BRAND_MAKER_LOGO"))
+    write_dart_brand(display_name, subtitle, about, source, accent, has_maker)
     theme = "flutter/lib/common.dart"
     replace_once(theme, r"(static const Color accent = )Color\(0xFF0071FF\);",
                  r"\g<1>Color(0xFF" + accent + ");")

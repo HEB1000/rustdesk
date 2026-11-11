@@ -459,7 +459,7 @@ void rtechShowAbout(BuildContext context) {
     builder: (ctx) => Directionality(
       textDirection: TextDirection.rtl,
       child: Dialog(
-        backgroundColor: const Color(0xFFFBF7F0),
+        backgroundColor: const Color(0xFFF7F9FC),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         child: Container(
           width: 460,
@@ -479,17 +479,17 @@ void rtechShowAbout(BuildContext context) {
                           style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF2B2B2B))),
+                              color: Color(0xFF1E2A44))),
                       if (kRtechSubtitle.isNotEmpty)
                         const Text(kRtechSubtitle,
                             style: TextStyle(
-                                fontSize: 14, color: Color(0xFF7A6A55))),
+                                fontSize: 14, color: Color(0xFF5B6B82))),
                       FutureBuilder<String>(
                         future: bind.mainGetVersion(),
                         builder: (c, s) => Text(
                             s.hasData ? 'גרסה ${s.data}' : '',
                             style: const TextStyle(
-                                fontSize: 12, color: Color(0xFF7A6A55))),
+                                fontSize: 12, color: Color(0xFF5B6B82))),
                       ),
                     ],
                   ),
@@ -499,7 +499,7 @@ void rtechShowAbout(BuildContext context) {
               const Text(
                   'מבוסס על RustDesk — תוכנת קוד פתוח ברישיון AGPL-3.0. '
                   'מותר להשתמש, להעתיק ולשנות לפי תנאי הרישיון.',
-                  style: TextStyle(fontSize: 13.5, color: Color(0xFF4A3F30))),
+                  style: TextStyle(fontSize: 13.5, color: Color(0xFF2E3B52))),
               const SizedBox(height: 6),
               InkWell(
                 onTap: () => launchUrl(Uri.parse(kRtechSource)),
@@ -510,17 +510,34 @@ void rtechShowAbout(BuildContext context) {
                         decoration: TextDecoration.underline)),
               ),
               if (kRtechAbout.isNotEmpty) const Divider(height: 28),
-              for (var i = 0; i < kRtechAbout.length; i++)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 3),
-                  child: SelectableText(
-                    kRtechAbout[i],
-                    style: TextStyle(
-                        fontSize: i == 0 ? 18 : 15,
-                        fontWeight: i == 0 ? FontWeight.w800 : FontWeight.w600,
-                        color: const Color(0xFF4A3F30)),
+              if (kRtechAbout.isNotEmpty)
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (kRtechHasMaker) ...[
+                    Image.asset('assets/rtech_maker.png',
+                        width: 56, height: 56),
+                    const SizedBox(width: 14),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var i = 0; i < kRtechAbout.length; i++)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 3),
+                            child: SelectableText(
+                              kRtechAbout[i],
+                              style: TextStyle(
+                                  fontSize: i == 0 ? 18 : 15,
+                                  fontWeight: i == 0
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  color: const Color(0xFF1E2A44)),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
+                ]),
               const SizedBox(height: 14),
               Align(
                 alignment: AlignmentDirectional.centerEnd,
@@ -564,12 +581,24 @@ class RtechBrand extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(kRtechDisplayName,
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
-                        color: dark ? Colors.white : const Color(0xFF1B1F23))),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(kRtechDisplayName,
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                          color: dark ? Colors.white : const Color(0xFF1B1F23))),
+                  if (kRtechHasMaker) ...[
+                    const SizedBox(width: 8),
+                    Tooltip(
+                      message: kRtechAbout.isNotEmpty
+                          ? kRtechAbout.first
+                          : 'יוצר התוכנה',
+                      child: Image.asset('assets/rtech_maker.png',
+                          width: 20, height: 20),
+                    ),
+                  ],
+                ]),
                 if (kRtechSubtitle.isNotEmpty)
                   Text(kRtechSubtitle,
                       style: TextStyle(

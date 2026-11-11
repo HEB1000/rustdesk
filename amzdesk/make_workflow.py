@@ -36,10 +36,10 @@ on:
         default: "R-TECH DESK"
       subtitle:
         description: "Second line on the logo (- for none)"
-        default: "א.מ.ז · מעבדת מחשבים"
+        default: "מעבדה מקצועית למחשבים ולאנדרואיד"
       logo:
         description: "Square picture (PNG/JPG): a path in this repository, or an https address"
-        default: "amzdesk/assets/logo-source.png"
+        default: "amzdesk/assets/rtech-icon.png"
       company:
         description: "Company in the file properties"
         default: "AMZ Computer Lab"
@@ -54,7 +54,10 @@ on:
         default: "פיתוח: א.מ.ז|053-3157965|a0533157965@gmail.com"
       accent:
         description: "Main color, 6 hex digits"
-        default: "A9622B"
+        default: "DC6425"
+      maker_logo:
+        description: "Maker's small logo next to the name and in About (- for none)"
+        default: "amzdesk/assets/logo-source.png"
   push:
     branches:
       - {BRANCH}
@@ -77,6 +80,7 @@ BRANDING_STEP = """
           BRAND_KEY: ${{ inputs.key }}
           BRAND_ABOUT: ${{ inputs.about }}
           BRAND_ACCENT: ${{ inputs.accent }}
+          BRAND_MAKER_LOGO: ${{ inputs.maker_logo }}
           BRAND_SOURCE: ${{ github.server_url }}/${{ github.repository }}
         run: |
           python3 -m pip install --quiet --disable-pip-version-check pillow
@@ -95,9 +99,14 @@ RENAME_STEP = """
 
 
 MSI_LINES = """
-          if ($env:BRAND_APP_NAME -ne 'rustdesk') { Move-Item ../../rustdesk/rustdesk.exe "../../rustdesk/$($env:BRAND_APP_NAME).exe" }
           python preprocess.py --arp -d ../../rustdesk --app-name "$env:BRAND_APP_NAME" -m "$env:BRAND_MSI_MANUFACTURER"
 """
+
+
+RENAME_EXE_LINE = (
+    "          # R-TECH DESK: the main program is named after the app (Install starts <app name>.exe)\n"
+    "          Move-Item ./rustdesk/rustdesk.exe \"./rustdesk/$($env:BRAND_APP_NAME).exe\""
+)
 
 
 # A quick Dart check of the R-TECH screens (about 5 minutes) before the hour-long Windows build,
@@ -270,6 +279,22 @@ def main() -> None:
     # The msi gets the app name too. Without it the msi is "RustDesk" by Purslane, with RustDesk's
     # upgrade code: on a computer with RustDesk it stops ("installed by self-installation") or
     # would replace it. preprocess.py looks for <app name>.exe in the folder it packs.
+    #
+    # The main program is <app name>.exe from the start: "Install" copies the folder and then
+    # starts <app name>.exe (src/platform/windows.rs), so with rustdesk.exe it failed with
+    # "Windows cannot find ...\R-TECH-DESK.exe".
+    old_mv = "          mv ./flutter/build/windows/${{ matrix.job.flutter-arch }}/runner/Release ./rustdesk"
+    if text.count(old_mv + "\n") != 1:
+        fail("the Build rustdesk step's mv line changed")
+    text = text.replace(old_mv + "\n", old_mv + "\n" + RENAME_EXE_LINE + "\n")
+    for old, new in (
+        ('& ".\\rustdesk\\rustdesk.exe" --version', '& ".\\rustdesk\\$($env:BRAND_APP_NAME).exe" --version'),
+        ("-e rustdesk.exe -l 11", '-e "${BRAND_APP_NAME}.exe" -l 11'),
+        ("-e ../../rustdesk/rustdesk.exe", '-e "../../rustdesk/${BRAND_APP_NAME}.exe"'),
+    ):
+        if text.count(old) != 1:
+            fail(f"expected one {old!r} in the Windows job")
+        text = text.replace(old, new)
     old_msi = "          python preprocess.py --arp -d ../../rustdesk"
     if text.count(old_msi + "\n") != 1:
         fail("the msi step's preprocess line changed")

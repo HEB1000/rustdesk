@@ -12,11 +12,13 @@ main color. Empty fields keep the defaults. A push to the `amzdesk` branch build
 The program is published under a release named after the technical name.
 
 - `brand.py` — the branding: program name, server address and key, icons, logos, file properties
-  (also of the self-extracting wrapper), the texts of the R-TECH screens and the main color.
+  (also of the self-extracting wrapper), the texts of the R-TECH screens, the main color, and the
+  maker's small logo (next to the name and in About).
 - `assets/` — the pictures it starts from.
 - `make_workflow.py` — writes `.github/workflows/amzdesk.yml` from upstream `flutter-build.yml`
   (Windows x64 only, the branding step, a quick Dart check before the long Windows build, and
-  an msi under the app name and company, so it does not touch an installed RustDesk).
+  an msi under the app name and company, so it does not touch an installed RustDesk). The main
+  program is renamed to `<app name>.exe` right after the build, because "Install" starts that file.
   Rerun it after syncing with upstream.
 
 ## Changes to the RustDesk source

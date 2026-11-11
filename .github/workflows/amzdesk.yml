@@ -15,10 +15,10 @@ on:
         default: "R-TECH DESK"
       subtitle:
         description: "Second line on the logo (- for none)"
-        default: "א.מ.ז · מעבדת מחשבים"
+        default: "מעבדה מקצועית למחשבים ולאנדרואיד"
       logo:
         description: "Square picture (PNG/JPG): a path in this repository, or an https address"
-        default: "amzdesk/assets/logo-source.png"
+        default: "amzdesk/assets/rtech-icon.png"
       company:
         description: "Company in the file properties"
         default: "AMZ Computer Lab"
@@ -33,7 +33,10 @@ on:
         default: "פיתוח: א.מ.ז|053-3157965|a0533157965@gmail.com"
       accent:
         description: "Main color, 6 hex digits"
-        default: "A9622B"
+        default: "DC6425"
+      maker_logo:
+        description: "Maker's small logo next to the name and in About (- for none)"
+        default: "amzdesk/assets/logo-source.png"
   push:
     branches:
       - amzdesk
@@ -191,6 +194,7 @@ jobs:
           BRAND_KEY: ${{ inputs.key }}
           BRAND_ABOUT: ${{ inputs.about }}
           BRAND_ACCENT: ${{ inputs.accent }}
+          BRAND_MAKER_LOGO: ${{ inputs.maker_logo }}
           BRAND_SOURCE: ${{ github.server_url }}/${{ github.repository }}
         run: |
           python3 -m pip install --quiet --disable-pip-version-check pillow
@@ -338,6 +342,8 @@ jobs:
           # --hwcodec is shared by all Windows targets; per-target extras (e.g. --vram) come from the matrix
           python3 .\build.py --portable --flutter --skip-portable-pack --hwcodec ${{ matrix.job.build-args }}
           mv ./flutter/build/windows/${{ matrix.job.flutter-arch }}/runner/Release ./rustdesk
+          # R-TECH DESK: the main program is named after the app (Install starts <app name>.exe)
+          Move-Item ./rustdesk/rustdesk.exe "./rustdesk/$($env:BRAND_APP_NAME).exe"
 
           # Download usbmmidd_v2.zip and extract it to ./rustdesk
           Invoke-WebRequest -Uri https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip -OutFile usbmmidd_v2.zip
@@ -425,7 +431,7 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true' && env.PUBLISH_UPDATE_METADATA == 'true'
         shell: powershell
         run: |
-          $reportedVersion = (& ".\rustdesk\rustdesk.exe" --version | Out-String).Trim()
+          $reportedVersion = (& ".\rustdesk\$($env:BRAND_APP_NAME).exe" --version | Out-String).Trim()
           if ($LASTEXITCODE -ne 0) {
             throw "rustdesk --version exited with $LASTEXITCODE"
           }
@@ -451,7 +457,7 @@ jobs:
           sed -i '/dpiAware/d' res/manifest.xml
           pushd ./libs/portable
           pip3 install -r requirements.txt
-          python3 ./generate.py -f ../../rustdesk/ -e rustdesk.exe -l 11 -t "${{ matrix.job.target }}" --exclude-exe
+          python3 ./generate.py -f ../../rustdesk/ -e "${BRAND_APP_NAME}.exe" -l 11 -t "${{ matrix.job.target }}" --exclude-exe
           popd
           mkdir -p ./packer-template
           cp ./target/${{ matrix.job.target }}/release/rustdesk-portable-packer.exe ./packer-template/rustdesk-template-${{ matrix.job.arch }}.exe
@@ -471,7 +477,7 @@ jobs:
           sed -i '/dpiAware/d' res/manifest.xml
           pushd ./libs/portable
           pip3 install -r requirements.txt
-          python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/rustdesk.exe
+          python3 ./generate.py -f ../../rustdesk/ -o . -e "../../rustdesk/${BRAND_APP_NAME}.exe"
           popd
           mkdir -p ./SignOutput
           mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
@@ -493,7 +499,6 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
           pushd ./res/msi
-          if ($env:BRAND_APP_NAME -ne 'rustdesk') { Move-Item ../../rustdesk/rustdesk.exe "../../rustdesk/$($env:BRAND_APP_NAME).exe" }
           python preprocess.py --arp -d ../../rustdesk --app-name "$env:BRAND_APP_NAME" -m "$env:BRAND_MSI_MANUFACTURER"
           nuget restore msi.sln
           $msiPlatform = if ('${{ matrix.job.arch }}' -eq 'aarch64') { 'ARM64' } else { 'x64' }
